@@ -8,3 +8,12 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Output files
+*.json
+*.mp4
+*.jpg
+*.jpeg
+
+# env
+.env
