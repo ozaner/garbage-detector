@@ -4,11 +4,7 @@ Safety analyzer module for detecting safety issues in garbage collection video f
 import base64
 import io
 import json
-import tempfile
-from pathlib import Path
-
 import cv2
-import numpy as np
 from openai import OpenAI
 
 from src.utils.config import get_openai_api_key
