@@ -48,14 +48,14 @@ Edit the .env file and add your API key
 # Help
 uv run main.py --help
 
-# Basic usage
-uv run main.py path/to/video.mp4
+# Analyze every 200th frame of garbage.mp4. Use 12 worker threads in parallel
+uv run main.py examples/garbage.mp4 -n 200 --workers 12
 
-# Analyze every 10th frame and save any frame with a detected issue
-uv run main.py path/to/video.mp4 -n 10 --save-frames
+# Analyze every 30th frame and save any frame with a detected issue
+uv run main.py examples/fire0.mp4 -n 30 --save-frames
 
-# Save all analyzed frames and use 8 worker threads
-uv run main.py path/to/video.mp4 --save-all-frames --workers 8
+# Analyze every 30th frame, save all of them, and use 8 worker threads
+uv run main.py examples/fire1.mp4 -n 30 --save-all-frames --workers 8
 ```
 
 ### Command Line Arguments
