@@ -46,6 +46,7 @@ class SafetyAnalyzer:
         
         Examples of safety issues to look for:
         - Fire or smoke coming from trash cans
+        - Fire or smoke coming from the garbage truck itself or its collector crane.
         - Hazardous materials visible (chemical containers, batteries, etc.)
         - Blocked access to trash cans
         - Unstable or damaged trash cans

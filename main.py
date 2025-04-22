@@ -47,6 +47,17 @@ def parse_arguments():
         default="detected_frames",
         help="Directory to save frames with detected issues (default: detected_frames)"
     )
+    parser.add_argument(
+        "--save-all-frames",
+        action="store_true",
+        help="Save all analyzed frames regardless of safety issues"
+    )
+    parser.add_argument(
+        "--all-frames-dir",
+        type=str,
+        default="all_frames",
+        help="Directory to save all analyzed frames (default: all_frames)"
+    )
     
     return parser.parse_args()
 
@@ -68,6 +79,9 @@ def main():
     """Run the garbage truck safety detection system."""
     # Parse command line arguments
     args = parse_arguments()
+    
+    # TEMPORARY: Override to save all frames
+    args.save_all_frames = True
     
     # Check if the video file exists
     video_path = Path(args.video_path)
@@ -115,6 +129,12 @@ def main():
         frames_dir.mkdir(parents=True, exist_ok=True)
         print(f"Frames with detected issues will be saved to: {frames_dir}")
     
+    # Create output directory for all frames if needed
+    if args.save_all_frames:
+        all_frames_dir = Path(args.all_frames_dir)
+        all_frames_dir.mkdir(parents=True, exist_ok=True)
+        print(f"All analyzed frames will be saved to: {all_frames_dir}")
+    
     # Process the video and analyze frames
     safety_report = {
         "video_file": str(video_path),
@@ -135,6 +155,12 @@ def main():
         progress = video_processor.frames_to_video_position(frame_number)
         sys.stdout.write(f"\rProcessing: {progress:.1f}% (Frame {frame_number}, Time: {timestamp})")
         sys.stdout.flush()
+        
+        # Always save the frame if save_all_frames is enabled
+        if args.save_all_frames:
+            frame_filename = f"frame_{frame_number:06d}_{timestamp.replace(':', '_')}.jpg"
+            frame_path = all_frames_dir / frame_filename
+            video_processor.save_frame(frame, frame_path)
         
         # Analyze the frame for safety issues
         analysis_result = safety_analyzer.analyze_frame(frame)
@@ -170,6 +196,8 @@ def main():
     print(f"\nAnalysis complete!")
     print(f"Processed {frame_count} frames")
     print(f"Detected {issues_count} safety issues")
+    if args.save_all_frames:
+        print(f"All analyzed frames saved to: {all_frames_dir}")
     print(f"Safety report saved to: {output_path}")
     
     # Cleanup
