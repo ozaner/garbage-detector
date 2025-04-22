@@ -11,6 +11,7 @@ import time
 import concurrent.futures
 from pathlib import Path
 from tqdm import tqdm
+import cv2
 
 from src.detection.safety_analyzer import SafetyAnalyzer
 from src.video.processor import VideoProcessor
@@ -117,9 +118,6 @@ def main():
     """Run the garbage truck safety detection system."""
     # Parse command line arguments
     args = parse_arguments()
-    
-    # TEMPORARY: Override to save all frames
-    args.save_all_frames = True
     
     # Check if the video file exists
     video_path = Path(args.video_path)
@@ -245,5 +243,4 @@ def main():
 
 if __name__ == "__main__":
     # Fix import issue for cv2 in the analyze_frame_task function
-    import cv2
     main()
