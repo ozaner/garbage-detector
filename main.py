@@ -8,7 +8,9 @@ import argparse
 import json
 import sys
 import time
+import concurrent.futures
 from pathlib import Path
+from tqdm import tqdm
 
 from src.detection.safety_analyzer import SafetyAnalyzer
 from src.video.processor import VideoProcessor
@@ -58,6 +60,18 @@ def parse_arguments():
         default="all_frames",
         help="Directory to save all analyzed frames (default: all_frames)"
     )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=4,
+        help="Number of parallel workers for frame analysis (default: 4)"
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=10,
+        help="Number of frames to process in each batch (default: 10)"
+    )
     
     return parser.parse_args()
 
@@ -73,6 +87,30 @@ def prompt_for_frame_interval():
             return interval
         except ValueError:
             print("Please enter a valid number.")
+
+
+def analyze_frame_task(args):
+    """
+    Task function for parallel processing of frames.
+    
+    Args:
+        args (tuple): Tuple containing (frame_number, frame, timestamp, analyzer, all_frames_dir)
+        
+    Returns:
+        tuple: (frame_number, timestamp, analysis_result, frame)
+    """
+    frame_number, frame, timestamp, analyzer, all_frames_dir = args
+    
+    # Save the frame if save_all_frames is enabled
+    if all_frames_dir:
+        frame_filename = f"frame_{frame_number:06d}_{timestamp.replace(':', '_')}.jpg"
+        frame_path = all_frames_dir / frame_filename
+        cv2.imwrite(str(frame_path), frame)
+    
+    # Analyze the frame for safety issues
+    analysis_result = analyzer.analyze_frame(frame)
+    
+    return frame_number, timestamp, analysis_result, frame
 
 
 def main():
@@ -114,7 +152,13 @@ def main():
     print(f"Frame count: {video_processor.frame_count}")
     print(f"FPS: {video_processor.fps}")
     print(f"Resolution: {video_processor.width}x{video_processor.height}")
-    print(f"Analyzing {video_processor.frame_count // frame_interval} frames...\n")
+    
+    # Calculate number of frames to process
+    num_frames_to_process = video_processor.frame_count // frame_interval
+    if video_processor.frame_count % frame_interval > 0:
+        num_frames_to_process += 1
+    
+    print(f"Analyzing {num_frames_to_process} frames with {args.workers} parallel workers...\n")
     
     # Initialize the safety analyzer
     try:
@@ -124,12 +168,14 @@ def main():
         sys.exit(1)
     
     # Create output directory for frames if needed
+    frames_dir = None
     if args.save_frames:
         frames_dir = Path(args.frames_dir)
         frames_dir.mkdir(parents=True, exist_ok=True)
         print(f"Frames with detected issues will be saved to: {frames_dir}")
     
     # Create output directory for all frames if needed
+    all_frames_dir = None
     if args.save_all_frames:
         all_frames_dir = Path(args.all_frames_dir)
         all_frames_dir.mkdir(parents=True, exist_ok=True)
@@ -143,49 +189,42 @@ def main():
         "detected_issues": []
     }
     
-    frame_count = 0
+    # Prepare frame batches for parallel processing
+    frame_batches = []
+    for frame_number, frame in video_processor.get_frame_at_intervals(frame_interval):
+        timestamp = video_processor.get_frame_timestamp(frame_number)
+        frame_batches.append((frame_number, frame, timestamp, safety_analyzer, all_frames_dir))
+    
+    # Process frames in parallel
     issues_count = 0
     
-    # Iterate through frames at the specified interval
-    for frame_number, frame in video_processor.get_frame_at_intervals(frame_interval):
-        frame_count += 1
-        timestamp = video_processor.get_frame_timestamp(frame_number)
-        
-        # Show progress
-        progress = video_processor.frames_to_video_position(frame_number)
-        sys.stdout.write(f"\rProcessing: {progress:.1f}% (Frame {frame_number}, Time: {timestamp})")
-        sys.stdout.flush()
-        
-        # Always save the frame if save_all_frames is enabled
-        if args.save_all_frames:
-            frame_filename = f"frame_{frame_number:06d}_{timestamp.replace(':', '_')}.jpg"
-            frame_path = all_frames_dir / frame_filename
-            video_processor.save_frame(frame, frame_path)
-        
-        # Analyze the frame for safety issues
-        analysis_result = safety_analyzer.analyze_frame(frame)
-        
-        # Process the results
-        safety_issues = analysis_result.get("safety_issues", [])
-        if safety_issues:
-            issues_count += len(safety_issues)
-            
-            # Add the issues to the report
-            for issue in safety_issues:
-                safety_report["detected_issues"].append({
-                    "frame_number": frame_number,
-                    "timestamp": timestamp,
-                    "issue_details": issue
-                })
-            
-            # Save the frame if requested
-            if args.save_frames:
-                frame_filename = f"frame_{frame_number:06d}_{timestamp.replace(':', '_')}.jpg"
-                frame_path = frames_dir / frame_filename
-                video_processor.save_frame(frame, frame_path)
-    
-    # Print a newline after progress updates
-    print("\n")
+    # Use ThreadPoolExecutor for I/O-bound operations (API calls)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as executor:
+        # Submit all tasks and get futures
+        with tqdm(total=len(frame_batches), desc="Analyzing frames") as progress_bar:
+            # Process results as they complete
+            for frame_number, timestamp, analysis_result, frame in executor.map(analyze_frame_task, frame_batches):
+                # Process the results
+                safety_issues = analysis_result.get("safety_issues", [])
+                if safety_issues:
+                    issues_count += len(safety_issues)
+                    
+                    # Add the issues to the report
+                    for issue in safety_issues:
+                        safety_report["detected_issues"].append({
+                            "frame_number": frame_number,
+                            "timestamp": timestamp,
+                            "issue_details": issue
+                        })
+                    
+                    # Save the frame if requested
+                    if args.save_frames:
+                        frame_filename = f"issue_frame_{frame_number:06d}_{timestamp.replace(':', '_')}.jpg"
+                        frame_path = frames_dir / frame_filename
+                        cv2.imwrite(str(frame_path), frame)
+                
+                # Update the progress bar
+                progress_bar.update(1)
     
     # Save the safety report
     output_path = Path(args.output)
@@ -194,7 +233,7 @@ def main():
     
     # Print summary
     print(f"\nAnalysis complete!")
-    print(f"Processed {frame_count} frames")
+    print(f"Processed {len(frame_batches)} frames")
     print(f"Detected {issues_count} safety issues")
     if args.save_all_frames:
         print(f"All analyzed frames saved to: {all_frames_dir}")
@@ -205,4 +244,6 @@ def main():
 
 
 if __name__ == "__main__":
+    # Fix import issue for cv2 in the analyze_frame_task function
+    import cv2
     main()

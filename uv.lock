@@ -64,6 +64,7 @@ dependencies = [
     { name = "openai" },
     { name = "opencv-python" },
     { name = "python-dotenv" },
+    { name = "tqdm" },
 ]
 
 [package.metadata]
@@ -71,6 +72,7 @@ requires-dist = [
     { name = "openai", specifier = ">=1.75.0" },
     { name = "opencv-python", specifier = ">=4.11.0.86" },
     { name = "python-dotenv", specifier = ">=1.1.0" },
+    { name = "tqdm", specifier = ">=4.67.1" },
 ]
 
 [[package]]
