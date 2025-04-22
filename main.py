@@ -125,15 +125,11 @@ def main():
         print(f"Error: Video file not found: {video_path}")
         sys.exit(1)
     
-    # Prompt for frame interval if not provided or if the user wants to adjust it
+    # Only prompt for frame interval if it wasn't specified in command line arguments
     if args.frame_interval is None:
         frame_interval = prompt_for_frame_interval()
     else:
-        adjust = input(f"Current frame interval is {args.frame_interval}. Adjust? (y/n): ")
-        if adjust.lower() == "y":
-            frame_interval = prompt_for_frame_interval()
-        else:
-            frame_interval = args.frame_interval
+        frame_interval = args.frame_interval
     
     print(f"Analyzing every {frame_interval}th frame...")
     
@@ -242,5 +238,4 @@ def main():
 
 
 if __name__ == "__main__":
-    # Fix import issue for cv2 in the analyze_frame_task function
     main()
